@@ -190,11 +190,9 @@ export const useDBStore = create<State>()(
           // Create unique name for exam database
           const name = `Esame-${new Date().toISOString().split('T')[0]}`;
 
-          // Check if database already exists
+          // Remove existing database if it exists to force reload of new schema
           if (get().databases[name]) {
-            // Connect to existing database instead of creating new one
-            await get().connect(name);
-            return { success: true, existed: true };
+            await get().remove(name);
           }
 
           const postgres = new PGlite(postgreIDBConnection(name));
