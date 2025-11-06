@@ -86,6 +86,8 @@ interface State {
 
   import: (data: SampleDataMeta<SampleDatakey>) => Promise<void>;
 
+  loadExamSchema: (backendUrl?: string) => Promise<{ success: boolean; existed: boolean }>;
+
   remove: (name: string) => Promise<void>;
 
   connect: (name: string) => Promise<void>;
@@ -172,6 +174,59 @@ export const useDBStore = create<State>()(
             schema: schema,
           };
         });
+      },
+
+      loadExamSchema: async (backendUrl: string = "http://localhost:8000") => {
+        try {
+          // Fetch SQL schema from backend
+          const response = await fetch(`${backendUrl}/api/student/schema`);
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch schema: ${response.statusText}`);
+          }
+
+          const sql = await response.text();
+
+          // Create unique name for exam database
+          const name = `Esame-${new Date().toISOString().split('T')[0]}`;
+
+          // Check if database already exists
+          if (get().databases[name]) {
+            // Connect to existing database instead of creating new one
+            await get().connect(name);
+            return { success: true, existed: true };
+          }
+
+          const postgres = new PGlite(postgreIDBConnection(name));
+
+          // Execute SQL to create schema and load data
+          await postgres.exec(sql);
+
+          const schema = await getDatabaseSchema(postgres);
+          const erd = await generateMermaidErd(postgres);
+
+          set((state) => {
+            state.active = {
+              name: name,
+              postgres: postgres,
+            };
+
+            state.databases[name] = {
+              name: name,
+              description: "Database dell'esame caricato automaticamente",
+              createdAt: new Date().toLocaleString(),
+              query: "SELECT * FROM information_schema.tables",
+              history: [],
+              erd: erd,
+              schema: schema,
+            };
+          });
+
+          return { success: true, existed: false };
+        } catch (error) {
+          console.error("Error loading exam schema:", error);
+          throw error;
+        }
       },
 
       remove: async (name) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDBStore } from "@/stores";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +25,35 @@ const App = () => {
   const isDesktop = useIsDesktop();
 
   const activeDatabase = useDBStore((state) => state.active);
+  const loadExamSchema = useDBStore((state) => state.loadExamSchema);
 
   const [activeMenu, setActiveMenu] = useState("playground");
+  const [isLoadingExam, setIsLoadingExam] = useState(false);
+
+  // Auto-load exam schema if autoload parameter is present
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shouldAutoload = params.get('autoload') === 'true';
+
+    if (shouldAutoload && !isLoadingExam) {
+      setIsLoadingExam(true);
+      loadExamSchema()
+        .then((result: { success: boolean; existed: boolean }) => {
+          if (result.existed) {
+            console.log('Exam database already existed, connected to it');
+          } else {
+            console.log('Exam database loaded successfully');
+          }
+        })
+        .catch((error: Error) => {
+          console.error('Failed to load exam schema:', error);
+          // You could show a toast notification here
+        })
+        .finally(() => {
+          setIsLoadingExam(false);
+        });
+    }
+  }, []); // Empty dependency array to run only once on mount
 
   const openDatabaseMenu = () =>
     modal.open({
@@ -41,7 +68,12 @@ const App = () => {
         <HeaderLogo />
         <div className="flex flex-row items-start gap-1 px-2">
           <h1 className="font-semibold text-xl capitalize">{activeMenu}</h1>
-          {activeDatabase && (
+          {isLoadingExam && (
+            <Badge className="flex-row items-center gap-0.5 bg-blue-500 animate-pulse">
+              <span>Caricamento database esame...</span>
+            </Badge>
+          )}
+          {activeDatabase && !isLoadingExam && (
             <Badge className="hidden flex-row items-center gap-0.5 sm:flex">
               <IconDatabase className="size-3 stroke-1" />
               <span className="line-clamp-1">{activeDatabase.name}</span>
