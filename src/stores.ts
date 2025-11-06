@@ -3,7 +3,7 @@ import { immer } from "zustand/middleware/immer";
 import { Results, PGlite } from "@electric-sql/pglite";
 import { postgresTransformer } from "@/utils/postgres";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { Cell, DataGridValue } from "@/components/ui/data-viewer";
+import { DataGridValue } from "@/components/ui/data-viewer";
 import { generateMermaidErd, getDatabaseSchema } from "@/postgres/setup";
 import {
   SampleDataMeta,
@@ -72,7 +72,7 @@ export interface Database {
 
   query?: string;
 
-  datagrid?: DataGridValue<Cell>[];
+  datagrid?: DataGridValue[];
 }
 
 interface State {
@@ -264,7 +264,7 @@ export const useDBStore = create<State>()(
         try {
           if (!query || !query.trim()) throw new Error(`no query to run`);
 
-          const result = await connection.postgres.exec(query);
+          const result = await connection.postgres.exec(query, { rowMode: 'array' });
 
           set((state) => {
             state.databases[connection.name].query = query;

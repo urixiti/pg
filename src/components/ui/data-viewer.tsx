@@ -17,9 +17,14 @@ export type Cell = Record<string, CellValue>;
 
 export type ColumnType = "string" | "number" | "id";
 
+export type ColumnDef = {
+  name: string;
+  type: ColumnType;
+};
+
 export type Column<T extends Cell> = Record<keyof T, ColumnType>;
 
-export type DataGridValue<T extends Cell> = { data: T[]; column: Column<T> };
+export type DataGridValue = { data: Cell[]; columns: ColumnDef[] };
 
 /**
  * we only use these 3 column icon, for this use case
@@ -34,12 +39,12 @@ const icon: Record<ColumnType, string> = {
 /**
  * transform column to GridColum (array)
  */
-const createGridColumns = <T extends Cell>(column: Column<T>): GridColumn[] =>
-  Object.keys(column).map((name) => ({
-    id: name,
+const createGridColumns = (columns: ColumnDef[]): GridColumn[] =>
+  columns.map((col, index) => ({
+    id: `col_${index}`,
     width: 120,
-    title: name,
-    icon: icon[column[name as unknown as keyof T]],
+    title: col.name,
+    icon: icon[col.type],
   }));
 
 /**
@@ -86,28 +91,28 @@ const createCell = (type: ColumnType, value: CellValue = ""): GridCell => {
 /**
  * generic everywhere
  */
-interface DataViewerProps<T extends Cell> {
-  data: T[];
-  column: Column<T>;
+interface DataViewerProps {
+  data: Cell[];
+  columns: ColumnDef[];
 }
 
 /**
  * Custom dataviewer from DataGrid
  */
-export const DataViewer = <T extends Cell>({
+export const DataViewer = ({
   data,
-  column,
-}: DataViewerProps<T>) => {
+  columns: columnDefs,
+}: DataViewerProps) => {
   const { isDarkMode } = useDarkMode();
 
-  const [columns, setColumns] = useState(createGridColumns(column));
+  const [columns, setColumns] = useState(createGridColumns(columnDefs));
 
   /**
    * update columns when cols params change
    */
   useEffect(() => {
-    setColumns(createGridColumns(column));
-  }, [column]);
+    setColumns(createGridColumns(columnDefs));
+  }, [columnDefs]);
 
   /**
    * resize column size function
@@ -132,13 +137,20 @@ export const DataViewer = <T extends Cell>({
     (cell: Item): GridCell => {
       const [col, row] = cell;
 
-      const key = Object.keys(column)[col] as keyof typeof column;
+      const columnDef = columnDefs[col];
+      const key = `col_${col}`;
 
       const rowCell = data[row]?.[key];
 
-      return createCell(column[key], rowCell);
+      // Safety check for undefined columnDef
+      if (!columnDef) {
+        console.error(`Column definition not found for index ${col}. Total columns: ${columnDefs.length}`);
+        return createCell("string", "");
+      }
+
+      return createCell(columnDef.type, rowCell);
     },
-    [column, data]
+    [columnDefs, data]
   );
 
   /**

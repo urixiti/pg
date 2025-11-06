@@ -2,7 +2,7 @@ import { types } from "@electric-sql/pglite";
 import { Results } from "@electric-sql/pglite";
 import {
   Cell,
-  Column,
+  ColumnDef,
   ColumnType,
   DataGridValue,
 } from "@/components/ui/data-viewer";
@@ -20,38 +20,43 @@ const columnTransformer: Record<number, ColumnType> = {
 
 export const postgresTransformer = (
   results: Results[]
-): DataGridValue<Cell>[] => {
+): DataGridValue[] => {
   return results
     .filter((result) => result.rows !== undefined)
     .map((result) => {
-      const column = result.fields.reduce(
-        (prev, curr) => {
-          const type = columnTransformer[curr.dataTypeID] || "string";
+      // Create array of column definitions
+      const columns: ColumnDef[] = result.fields.map((field) => ({
+        name: field.name,
+        type: columnTransformer[field.dataTypeID] || "string",
+      }));
 
-          return { ...prev, [curr.name]: type } as Column<Cell>;
-        },
-        {} as Column<Cell>
-      );
+      // Transform rows to use index-based keys
+      const data: Cell[] = result.rows?.map((row, rowIndex) => {
+        const processedRow: Cell = {};
 
-      const data = result.rows?.map((row) => {
-        for (const key in column) {
-          if (!row[key]) continue;
-
-          switch (typeof row[key]) {
-            case "string":
-            case "number":
-              continue;
-            case "object":
-              row[key] = JSON.stringify(row[key]);
-              continue;
-          }
-
-          if (Array.isArray(row[key])) row[key] = JSON.stringify(row[key]);
+        // Debug: Check if row length matches fields length
+        if (Array.isArray(row) && row.length !== result.fields.length) {
+          console.warn(`Row ${rowIndex}: length mismatch. Row has ${row.length} values but ${result.fields.length} fields defined`);
         }
 
-        return row;
-      });
+        result.fields.forEach((_field, index) => {
+          const key = `col_${index}`;
+          // Access by index to support duplicate column names
+          let value = row[index];
 
-      return { column, data };
+          // Handle non-primitive types
+          if (value && typeof value === "object") {
+            value = JSON.stringify(value);
+          }
+
+          processedRow[key] = value;
+        });
+
+        return processedRow;
+      }) || [];
+
+      console.log(`Transformer result: ${columns.length} columns, ${data.length} rows`);
+
+      return { columns, data };
     });
 };

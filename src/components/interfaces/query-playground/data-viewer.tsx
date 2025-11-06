@@ -4,7 +4,6 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { forwardRef, useEffect, useState } from "react";
 import {
-  Cell,
   DataGridValue,
   DataViewer as DataGridViewer,
 } from "@/components/ui/data-viewer";
@@ -17,7 +16,7 @@ import {
 } from "@/components/ui/select";
 
 interface DataViewerProps extends React.HTMLAttributes<HTMLDivElement> {
-  data: DataGridValue<Cell>[];
+  data: DataGridValue[];
 }
 
 export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
@@ -40,7 +39,7 @@ export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
 
       if (!activeResult) return;
 
-      const headers = Object.keys(activeResult.column);
+      const headers = activeResult.columns.map((col) => col.name);
 
       if (headers.length === 0) return toast.error("nothing to export");
 
@@ -48,9 +47,10 @@ export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
 
       activeResult.data.forEach((item) => {
         csv +=
-          headers
-            .map((header) => {
-              return JSON.stringify(item[header], (_key, value) => {
+          activeResult.columns
+            .map((_col, idx) => {
+              const key = `col_${idx}`;
+              return JSON.stringify(item[key], (_key, value) => {
                 return value === null ? "" : value;
               });
             })
@@ -100,7 +100,7 @@ export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
           <div className="flex size-full">
             <DataGridViewer
               data={data[active].data}
-              column={data[active].column}
+              columns={data[active].columns}
             />
           </div>
           <div className="flex h-8 w-full items-center justify-between border-t px-2 py-1">
