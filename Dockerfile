@@ -9,8 +9,8 @@ COPY package*.json pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (no frozen lockfile to allow updates)
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY . .
@@ -24,13 +24,22 @@ FROM nginx:alpine
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Simple nginx config for SPA
+# Nginx config for SPA served under /pg path
 RUN echo 'server { \
     listen 80; \
-    root /usr/share/nginx/html; \
-    index index.html; \
-    location / { \
+    # Serve /pg path by aliasing to root \
+    location /pg/ { \
+        alias /usr/share/nginx/html/; \
         try_files $uri $uri/ /index.html; \
+        index index.html; \
+    } \
+    # Handle /pg without trailing slash (preserve query string) \
+    location = /pg { \
+        return 301 /pg/$is_args$args; \
+    } \
+    # Redirect root to /pg \
+    location = / { \
+        return 301 /pg/; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 

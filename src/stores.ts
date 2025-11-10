@@ -176,10 +176,13 @@ export const useDBStore = create<State>()(
         });
       },
 
-      loadExamSchema: async (backendUrl: string = "http://localhost:8000") => {
+      loadExamSchema: async (backendUrl?: string) => {
         try {
+          // Use current origin if backendUrl not provided (works when served through frontend proxy)
+          const baseUrl = backendUrl || window.location.origin;
+
           // Fetch SQL schema from backend
-          const response = await fetch(`${backendUrl}/api/student/schema`);
+          const response = await fetch(`${baseUrl}/api/student/schema`);
 
           if (!response.ok) {
             throw new Error(`Failed to fetch schema: ${response.statusText}`);
