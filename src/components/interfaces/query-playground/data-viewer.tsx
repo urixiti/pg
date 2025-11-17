@@ -40,7 +40,17 @@ export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
 
       if (!activeResult) return;
 
-      const headers = Object.keys(activeResult.column);
+      // Use columnMapping if available to get original column names
+      let headers: string[];
+      let columnKeys: string[];
+
+      if (activeResult.columnMapping) {
+        headers = activeResult.columnMapping.map((m) => m.originalName);
+        columnKeys = activeResult.columnMapping.map((m) => m.uniqueKey);
+      } else {
+        headers = Object.keys(activeResult.column);
+        columnKeys = headers;
+      }
 
       if (headers.length === 0) return toast.error("nothing to export");
 
@@ -48,9 +58,9 @@ export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
 
       activeResult.data.forEach((item) => {
         csv +=
-          headers
-            .map((header) => {
-              return JSON.stringify(item[header], (_key, value) => {
+          columnKeys
+            .map((key) => {
+              return JSON.stringify(item[key], (_key, value) => {
                 return value === null ? "" : value;
               });
             })
@@ -101,6 +111,7 @@ export const DataViewer = forwardRef<HTMLDivElement, DataViewerProps>(
             <DataGridViewer
               data={data[active].data}
               column={data[active].column}
+              columnMapping={data[active].columnMapping}
             />
           </div>
           <div className="flex h-8 w-full items-center justify-between border-t px-2 py-1">

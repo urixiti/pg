@@ -19,7 +19,17 @@ export type ColumnType = "string" | "number" | "id";
 
 export type Column<T extends Cell> = Record<keyof T, ColumnType>;
 
-export type DataGridValue<T extends Cell> = { data: T[]; column: Column<T> };
+export type ColumnMapping = Array<{
+  uniqueKey: string;
+  originalName: string;
+  type: ColumnType;
+}>;
+
+export type DataGridValue<T extends Cell> = {
+  data: T[];
+  column: Column<T>;
+  columnMapping?: ColumnMapping;
+};
 
 /**
  * we only use these 3 column icon, for this use case
@@ -34,13 +44,28 @@ const icon: Record<ColumnType, string> = {
 /**
  * transform column to GridColum (array)
  */
-const createGridColumns = <T extends Cell>(column: Column<T>): GridColumn[] =>
-  Object.keys(column).map((name) => ({
+const createGridColumns = <T extends Cell>(
+  column: Column<T>,
+  columnMapping?: ColumnMapping
+): GridColumn[] => {
+  if (columnMapping) {
+    // Use columnMapping to preserve original column names
+    return columnMapping.map((mapping) => ({
+      id: mapping.uniqueKey,
+      width: 120,
+      title: mapping.originalName,
+      icon: icon[mapping.type],
+    }));
+  }
+
+  // Fallback to original behavior if no mapping provided
+  return Object.keys(column).map((name) => ({
     id: name,
     width: 120,
     title: name,
     icon: icon[column[name as unknown as keyof T]],
   }));
+};
 
 /**
  * creating cells based on it's column type
@@ -89,6 +114,7 @@ const createCell = (type: ColumnType, value: CellValue = ""): GridCell => {
 interface DataViewerProps<T extends Cell> {
   data: T[];
   column: Column<T>;
+  columnMapping?: ColumnMapping;
 }
 
 /**
@@ -97,17 +123,20 @@ interface DataViewerProps<T extends Cell> {
 export const DataViewer = <T extends Cell>({
   data,
   column,
+  columnMapping,
 }: DataViewerProps<T>) => {
   const { isDarkMode } = useDarkMode();
 
-  const [columns, setColumns] = useState(createGridColumns(column));
+  const [columns, setColumns] = useState(
+    createGridColumns(column, columnMapping)
+  );
 
   /**
    * update columns when cols params change
    */
   useEffect(() => {
-    setColumns(createGridColumns(column));
-  }, [column]);
+    setColumns(createGridColumns(column, columnMapping));
+  }, [column, columnMapping]);
 
   /**
    * resize column size function

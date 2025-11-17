@@ -2,6 +2,7 @@ import { types } from "@electric-sql/pglite";
 import { Results } from "@electric-sql/pglite";
 import {
   Cell,
+  CellValue,
   Column,
   ColumnType,
   DataGridValue,
@@ -24,34 +25,91 @@ export const postgresTransformer = (
   return results
     .filter((result) => result.rows !== undefined)
     .map((result) => {
-      const column = result.fields.reduce(
-        (prev, curr) => {
-          const type = columnTransformer[curr.dataTypeID] || "string";
+      // Track column name occurrences to handle duplicates
+      const nameCount: Record<string, number> = {};
+      const columnMapping: Array<{
+        uniqueKey: string;
+        originalName: string;
+        type: ColumnType;
+      }> = [];
 
-          return { ...prev, [curr.name]: type } as Column<Cell>;
+      // Create unique keys for each column, handling duplicates
+      result.fields.forEach((field) => {
+        const type = columnTransformer[field.dataTypeID] || "string";
+        const originalName = field.name;
+
+        // Check if this name already exists
+        if (nameCount[originalName] === undefined) {
+          nameCount[originalName] = 1;
+          columnMapping.push({
+            uniqueKey: originalName,
+            originalName,
+            type,
+          });
+        } else {
+          // Handle duplicate: append _2, _3, etc.
+          nameCount[originalName]++;
+          const uniqueKey = `${originalName}_${nameCount[originalName]}`;
+          columnMapping.push({
+            uniqueKey,
+            originalName,
+            type,
+          });
+        }
+      });
+
+      // Build column object with unique keys
+      const column = columnMapping.reduce(
+        (prev, curr) => {
+          return { ...prev, [curr.uniqueKey]: curr.type } as Column<Cell>;
         },
         {} as Column<Cell>
       );
 
+      // Process rows: map duplicate column values to unique keys
       const data = result.rows?.map((row) => {
-        for (const key in column) {
-          if (!row[key]) continue;
+        const processedRow: Cell = {};
 
-          switch (typeof row[key]) {
+        // Check if row is an array (PGLite raw format) or object
+        const isArray = Array.isArray(row);
+
+        // Map row values using column mapping
+        columnMapping.forEach((mapping, index) => {
+          let value: CellValue;
+
+          if (isArray) {
+            // Access by index if row is an array
+            value = (row as CellValue[])[index];
+          } else {
+            // Access by original name if row is an object
+            // Note: this will lose duplicate columns with same name
+            value = (row as Cell)[mapping.originalName];
+          }
+
+          processedRow[mapping.uniqueKey] = value;
+        });
+
+        // Process special types (objects, arrays, etc.)
+        for (const key in processedRow) {
+          if (!processedRow[key]) continue;
+
+          switch (typeof processedRow[key]) {
             case "string":
             case "number":
               continue;
             case "object":
-              row[key] = JSON.stringify(row[key]);
+              processedRow[key] = JSON.stringify(processedRow[key]);
               continue;
           }
 
-          if (Array.isArray(row[key])) row[key] = JSON.stringify(row[key]);
+          if (Array.isArray(processedRow[key])) {
+            processedRow[key] = JSON.stringify(processedRow[key]);
+          }
         }
 
-        return row;
+        return processedRow;
       });
 
-      return { column, data };
+      return { column, data, columnMapping };
     });
 };
